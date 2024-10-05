@@ -1,117 +1,151 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import {GoogleSignin} from '@react-native-google-signin/google-signin';
+import React, {useEffect, useRef, useState} from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   SafeAreaView,
-  ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
-  useColorScheme,
+  TouchableOpacity,
   View,
+  ScrollView,
 } from 'react-native';
+import {WebView} from 'react-native-webview';
+import auth from '@react-native-firebase/auth';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+const App = () => {
+  const webviewRef = useRef<WebView>(null);
+  const [showGoogleButton, setShowGoogleButton] = useState<boolean>(false);
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId:
+        '478293875794-c3g29qmu7demtoriko6qjltavqskhhjs.apps.googleusercontent.com',
+    });
+  }, []);
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+  const onGoogleButtonPress = async () => {
+    try {
+      await GoogleSignin.hasPlayServices({showPlayServicesUpdateDialog: true});
+      const result = await GoogleSignin.signIn();
 
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+      if (!result?.data?.idToken) {
+        throw new Error('No se pudo obtener el idToken');
+      }
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+      const firebaseIdToken = await auth()?.currentUser?.getIdToken();
+      const uid = await auth()?.currentUser?.uid;
+
+      const extractedData = {
+        email: result.data.user.email,
+        accessToken: firebaseIdToken,
+        displayName: result.data.user.name,
+        phoneNumber: '',
+        uid: uid,
+        admin: true,
+      };
+
+      const googleCredential = auth.GoogleAuthProvider.credential(
+        result?.data?.idToken,
+      );
+
+      await auth().signInWithCredential(googleCredential);
+
+      if (webviewRef.current) {
+        const injectedData = JSON.stringify(extractedData)
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'");
+        const script = `
+          (function() {
+            var data = '${injectedData}';
+            window.localStorage.setItem('googleUserData', data);
+          })();
+        `;
+        webviewRef.current.injectJavaScript(script);
+      }
+    } catch (error) {
+      console.error('Error en el inicio de sesión:', error);
+    }
+  };
+
+  const handleNavigationStateChange = (navState: any) => {
+    const {url} = navState;
+    try {
+      if (url.match(/\/(login|register|)$/)) {
+        setShowGoogleButton(true);
+      } else {
+        setShowGoogleButton(false);
+      }
+    } catch (error) {
+      console.error('Error al analizar la URL:', error);
+      setShowGoogleButton(false);
+    }
   };
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
-      />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.contentContainer}>
+          {/* WebView se coloca en un ScrollView */}
+          <ScrollView contentContainerStyle={{flexGrow: 1}}>
+            <WebView
+              ref={webviewRef}
+              source={{uri: 'http://192.168.1.104:3002'}}
+              style={styles.webview}
+              onMessage={event => {
+                console.log(
+                  'Mensaje recibido desde la web:',
+                  event.nativeEvent.data,
+                );
+              }}
+              onNavigationStateChange={handleNavigationStateChange}
+            />
+          </ScrollView>
+
+          {/* Botón de Google colocado al final con flexbox */}
+          {showGoogleButton && (
+            <View style={styles.googleButtonContainer}>
+              <TouchableOpacity
+                onPress={onGoogleButtonPress}
+                style={styles.googleButton}>
+                <Text style={styles.buttonText}>Iniciar sesión con Google</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
-}
+};
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  contentContainer: {
+    flex: 1, 
+    justifyContent: 'space-between', 
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  webview: {
+    flex: 1,
   },
-  highlight: {
-    fontWeight: '700',
+  googleButtonContainer: {
+    marginVertical: 10,
+    alignItems: 'center',
+    paddingBottom: Platform.OS === 'ios' ? 20 : 10, 
+  },
+  googleButton: {
+    backgroundColor: '#4285F4',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 5,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
   },
 });
 
