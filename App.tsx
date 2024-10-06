@@ -105,7 +105,6 @@ const App = () => {
             />
           </ScrollView>
 
-          {/* Botón de Google colocado al final con flexbox */}
           {showGoogleButton && (
             <View style={styles.googleButtonContainer}>
               <TouchableOpacity
@@ -139,13 +138,13 @@ const styles = StyleSheet.create({
   },
   googleButton: {
     backgroundColor: '#4285F4',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 40,
     borderRadius: 5,
   },
   buttonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 20,
   },
 });
 
