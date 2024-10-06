@@ -71,7 +71,7 @@ const App = () => {
   const handleNavigationStateChange = (navState: any) => {
     const {url} = navState;
     try {
-      if (url.match(/\/(login|register|)$/)) {
+      if (url.match(/\/(login|signup)(\?|$)/)) {
         setShowGoogleButton(true);
       } else {
         setShowGoogleButton(false);
@@ -93,7 +93,7 @@ const App = () => {
           <ScrollView contentContainerStyle={{flexGrow: 1}}>
             <WebView
               ref={webviewRef}
-              source={{uri: 'http://192.168.1.104:3002'}}
+              source={{uri: 'http://192.168.1.104:3003'}}
               style={styles.webview}
               onMessage={event => {
                 console.log(
