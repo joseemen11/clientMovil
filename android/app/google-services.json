@@ -44,6 +44,43 @@
     },
     {
       "client_info": {
+        "mobilesdk_app_id": "1:478293875794:android:00d4748b1b86915651938b",
+        "android_client_info": {
+          "package_name": "com.ticona.app2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "478293875794-m0rhftap8kokvkl6r8vqvjbfeogou22e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ticona.app2",
+            "certificate_hash": "1a35423cc9aa8163bba876d51d9badfefa707868"
+          }
+        },
+        {
+          "client_id": "478293875794-c3g29qmu7demtoriko6qjltavqskhhjs.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8nW-prYHFecSC9L6ETfTkJZDjLsRrpTY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "478293875794-c3g29qmu7demtoriko6qjltavqskhhjs.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:478293875794:android:8c8b06346c6c35b451938b",
         "android_client_info": {
           "package_name": "com.ticonaCliente.app"
