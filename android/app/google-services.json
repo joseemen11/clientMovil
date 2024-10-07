@@ -59,6 +59,14 @@
           }
         },
         {
+          "client_id": "478293875794-oqlpqvctegs23l4g9qhs13htpgpauba8.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.ticonaCliente.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "478293875794-c3g29qmu7demtoriko6qjltavqskhhjs.apps.googleusercontent.com",
           "client_type": 3
         }

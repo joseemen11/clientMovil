@@ -79,7 +79,7 @@ android {
 
     namespace "com.my"
     defaultConfig {
-        applicationId "com.ticona.app"
+        applicationId "com.ticonaCliente.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
