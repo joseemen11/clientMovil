@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:478293875794:android:a4d9441e7a0471aa51938b",
         "android_client_info": {
-          "package_name": "com.ticona.app"
+          "package_name": "com.ticona.app2"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "478293875794-ih7i5kfhjko7n1jufld3gfc4spvlohhn.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.ticona.app",
+            "package_name": "com.ticona.app2",
             "certificate_hash": "2c55357b70bff9fd9de565c51f956e3a0c4fde27"
           }
         },
