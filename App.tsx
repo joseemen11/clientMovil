@@ -1,6 +1,6 @@
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
 import React, {useEffect, useRef, useState} from 'react';
-import { request, PERMISSIONS } from 'react-native-permissions';
+import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
 import Geolocation from 'react-native-geolocation-service';
 import {
   KeyboardAvoidingView,
@@ -12,19 +12,34 @@ import {
   View,
   ScrollView,
   BackHandler,
+  Alert,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
+import notifee, {AndroidImportance} from '@notifee/react-native';
 import auth from '@react-native-firebase/auth';
+import messaging from '@react-native-firebase/messaging';
 const App = () => {
   const webviewRef = useRef<WebView>(null);
   const [showGoogleButton, setShowGoogleButton] = useState<boolean>(false);
   const [canGoBack, setCanGoBack] = useState(false);
+  const [fcmToken, setFcmToken] = useState<string>('');
   useEffect(() => {
+    createDefaultChannel();
+    requestAndroidNotificationPermission();
     GoogleSignin.configure({
       webClientId:
         '478293875794-c3g29qmu7demtoriko6qjltavqskhhjs.apps.googleusercontent.com',
     });
   }, []);
+
+  async function createDefaultChannel() {
+    await notifee.createChannel({
+      id: 'default',
+      name: 'Default Channel',
+      importance: AndroidImportance.HIGH,
+    });
+  }
+
   useEffect(() => {
     const backAction = () => {
       if (canGoBack && webviewRef.current) {
@@ -34,14 +49,61 @@ const App = () => {
       return false; // Permitir el comportamiento predeterminado (cerrar la app)
     };
     const backHandler = BackHandler.addEventListener(
-      "hardwareBackPress",
-      backAction
+      'hardwareBackPress',
+      backAction,
     );
     return () => backHandler.remove();
   }, [canGoBack]);
+
   useEffect(() => {
     requestLocationPermission();
   }, []);
+
+  useEffect(() => {
+    const setupNotifications = async () => {
+      await requestNotificationPermission();
+      const token = await messaging().getToken();
+      setFcmToken(token);
+
+      const unsubscribe = messaging().onMessage(async remoteMessage => {
+        Alert.alert(
+          remoteMessage.notification?.title || 'Nuevo',
+          remoteMessage.notification?.body || 'Nueva notificación',
+        );
+      });
+      return unsubscribe;
+    };
+    setupNotifications().then(unsub => {
+      return () => {
+        if (typeof unsub === 'function') unsub();
+      };
+    });
+  }, []);
+
+  const injectFcmToken = () => {
+    if (!webviewRef.current || !fcmToken) {
+      console.log('No se puede inyectar: WebView o FCM Token no disponible');
+      return;
+    }
+
+    const dataToInject = {fcmToken};
+    const dataString = JSON.stringify(dataToInject)
+      .replace(/\\/g, '\\\\')
+      .replace(/'/g, "\\'");
+
+    const script = `
+      (function() {
+        var data = '${dataString}';
+
+        window.localStorage.setItem('fcmTokenNative', data);
+
+      })();
+    `;
+
+    // Inyectamos
+    webviewRef.current.injectJavaScript(script);
+  };
+
   const onGoogleButtonPress = async () => {
     try {
       await GoogleSignin.hasPlayServices({showPlayServicesUpdateDialog: true});
@@ -85,6 +147,7 @@ const App = () => {
     try {
       if (url.match(/\/(login)(\?|$)/)) {
         setShowGoogleButton(true);
+        injectFcmToken();
       } else {
         setShowGoogleButton(false);
       }
@@ -93,6 +156,11 @@ const App = () => {
       setShowGoogleButton(false);
     }
   };
+  useEffect(() => {
+    if (fcmToken) {
+      injectFcmToken();
+    }
+  }, [fcmToken]);
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -107,6 +175,7 @@ const App = () => {
               //source={{uri: 'https://dev.ticonaa.com'}}
               //source={{uri: 'https://admindev.ticonaa.com'}}
               //source={{uri: 'https://ticona.store'}}
+              // source={{uri: 'http://192.168.0.15:3002'}}
               source={{uri: 'https://admin.ticona.store'}}
               style={styles.webview}
               onMessage={event => {
@@ -164,7 +233,7 @@ const requestLocationPermission = async () => {
     const granted = await request(
       Platform.OS === 'ios'
         ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE
-        : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+        : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
     );
     if (granted === 'granted') {
       console.log('Permiso de ubicación concedido');
@@ -176,13 +245,37 @@ const requestLocationPermission = async () => {
         error => {
           console.log(error.code, error.message);
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
       );
     } else {
       console.log('Permiso de ubicación denegado');
     }
   } catch (err) {
     console.warn(err);
+  }
+};
+const requestNotificationPermission = async () => {
+  const authStatus = await messaging().requestPermission();
+  const enabled =
+    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+  if (enabled) {
+    console.log('Permiso de notificación concedido!');
+  } else {
+    console.log('Permiso de notificación denegado...');
+  }
+};
+
+const requestAndroidNotificationPermission = async () => {
+  if (Platform.OS === 'android') {
+    const notifResult = await request(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+    if (notifResult !== RESULTS.GRANTED) {
+      Alert.alert(
+        'Permiso de notificaciones denegado',
+        'No podremos mostrarte notificaciones de nuevos pedidos.',
+      );
+    }
   }
 };
 export default App;
