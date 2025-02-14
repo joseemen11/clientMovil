@@ -1,6 +1,7 @@
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
 import React, {useEffect, useRef, useState} from 'react';
 import {request, PERMISSIONS, RESULTS} from 'react-native-permissions';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from 'react-native-geolocation-service';
 import {
   KeyboardAvoidingView,
@@ -13,6 +14,8 @@ import {
   ScrollView,
   BackHandler,
   Alert,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import {WebView} from 'react-native-webview';
 import notifee, {AndroidImportance} from '@notifee/react-native';
@@ -24,6 +27,7 @@ const App = () => {
   const [showGoogleButton, setShowGoogleButton] = useState<boolean>(false);
   const [canGoBack, setCanGoBack] = useState(false);
   const [fcmToken, setFcmToken] = useState<string>('');
+  const [pendingRedirectLink, setPendingRedirectLink] = useState<any>(null);
 
   useEffect(() => {
     createDefaultChannel();
@@ -65,22 +69,39 @@ const App = () => {
     const setupNotifications = async () => {
       await requestNotificationPermission();
       const token = await messaging().getToken();
-      setFcmToken(token);
-
+      setFcmToken(token);      
       const unsubscribe = messaging().onMessage(async remoteMessage => {
         Alert.alert(
-          remoteMessage.notification?.title || 'Nuevo',
-          remoteMessage.notification?.body || 'Nueva notificación',
+          typeof remoteMessage.data?.title === 'string' ? remoteMessage.data.title : '',
+          typeof remoteMessage.data?.body === 'string'
+            ? remoteMessage.data.body
+            : JSON.stringify(remoteMessage.data?.body || {}),
         );
       });
       return unsubscribe;
     };
     setupNotifications().then(unsub => {
-
       return () => {
         if (typeof unsub === 'function') unsub();
       };
     });
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener(
+      'change',
+      async (nextState: AppStateStatus) => {
+        if (nextState === 'active') {
+
+          const pendingLink = await AsyncStorage.getItem('pendingLink');
+          if (pendingLink) {
+            redirectToLink(pendingLink);
+            await AsyncStorage.removeItem('pendingLink'); 
+          }
+        }
+      },
+    );
+    return () => subscription.remove();
   }, []);
 
   const injectFcmToken = () => {
@@ -89,13 +110,12 @@ const App = () => {
       return;
     }
 
-    // Creamos un objeto con el token FCM
     const dataToInject = {fcmToken};
+    
     const dataString = JSON.stringify(dataToInject)
       .replace(/\\/g, '\\\\')
       .replace(/'/g, "\\'");
 
-    // Script a inyectar en la WebView
     const script = `
       (function() {
         var data = '${dataString}';
@@ -105,7 +125,6 @@ const App = () => {
       })();
     `;
 
-    // Inyectamos
     webviewRef.current.injectJavaScript(script);
   };
 
@@ -161,6 +180,47 @@ const App = () => {
       setShowGoogleButton(false);
     }
   };
+
+  useEffect(() => {
+    async function checkInitialNotification() {
+      const initialNotification = await notifee.getInitialNotification();
+      if (initialNotification?.notification?.data?.link) {
+        setPendingRedirectLink(initialNotification.notification.data.link);
+      }
+    }
+
+    checkInitialNotification();
+  }, []);
+
+  const handleWebViewLoadEnd = () => {
+    if (pendingRedirectLink) {
+      const baseUrl = 'https://ticona.store';
+      const fullUrl = baseUrl + pendingRedirectLink;
+      const script = `
+        (function() {
+          window.location.href = '${fullUrl}';
+        })();
+      `;
+      webviewRef.current?.injectJavaScript(script);
+
+      setPendingRedirectLink(null);
+    }
+  };
+
+  const redirectToLink = (link: string) => {
+    if (webviewRef.current) {
+      const baseUrl = 'https://ticona.store';
+      const fullUrl = baseUrl + link;
+
+      const script = `
+        (function() {
+          window.location.href = '${fullUrl}';
+        })();
+      `;
+      webviewRef.current.injectJavaScript(script);
+    }
+  };
+
   useEffect(() => {
     if (fcmToken) {
       injectFcmToken();
@@ -179,14 +239,17 @@ const App = () => {
               ref={webviewRef}
               //source={{uri: 'https://dev.ticonaa.com'}}
               // source={{uri: 'https://admindev.ticona.store'}}
-              // source={{uri: 'http://192.168.0.15:3002'}}
+              // source={{uri: 'http://192.168.0.15:3003'}}
               source={{uri: 'https://ticona.store'}}
               // source={{uri: 'https://admin.ticona.store'}}
               style={styles.webview}
-              onMessage={event => {
-                
-              }}
+              onMessage={event => {}}
+              onLoadEnd={handleWebViewLoadEnd}
               onNavigationStateChange={handleNavigationStateChange}
+              sharedCookiesEnabled={true}
+              thirdPartyCookiesEnabled={true}
+              domStorageEnabled={true}
+              javaScriptEnabled={true}
             />
           </ScrollView>
           {showGoogleButton && (
@@ -240,15 +303,13 @@ const requestLocationPermission = async () => {
     );
     if (granted === 'granted') {
       Geolocation.getCurrentPosition(
-        position => {
-          console.log(position);
-        },
+        position => {},
         error => {
           console.log(error.code, error.message);
         },
         {enableHighAccuracy: true, timeout: 15000, maximumAge: 10000},
       );
-    } 
+    }
   } catch (err) {
     console.warn(err);
   }
@@ -259,21 +320,19 @@ const requestNotificationPermission = async () => {
     authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
     authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-  if (enabled) {
-    console.log('Permiso de notificación concedido!');
-  } else {
-    console.log('Permiso de notificación denegado...');
-  }
 };
 
 const requestAndroidNotificationPermission = async () => {
   if (Platform.OS === 'android') {
-    const notifResult = await request(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
-    if (notifResult !== RESULTS.GRANTED) {
-      Alert.alert(
-        'Permiso de notificaciones denegado',
-        'No podremos mostrarte notificaciones de nuevos pedidos.',
-      );
+    if (Platform.Version >= 33) {
+      const notifResult = await request(PERMISSIONS.ANDROID.POST_NOTIFICATIONS);
+
+      if (notifResult !== RESULTS.GRANTED) {
+        Alert.alert(
+          'Permiso de notificaciones denegado',
+          'No podremos mostrarte notificaciones de nuevos pedidos.',
+        );
+      }
     }
   }
 };
